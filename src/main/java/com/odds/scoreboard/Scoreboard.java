@@ -48,6 +48,17 @@ public interface Scoreboard {
     List<Match> getSummary();
 
     /**
+     * Looks up what a player scored in the whole tournament: the live and the finished matches of this
+     * board, grouped per match. The player is the exact triple of team, shirt number and surname; the
+     * team is the one credited with the points. This is a query: it changes nothing and publishes no
+     * event.
+     *
+     * @throws PlayerNotFoundException if no points are recorded for the player. There is no roster,
+     *                                 so this also covers an unknown team or a player who hasn't scored.
+     */
+    PlayerScore getPlayerScore(String team, int shirtNumber, String playerSurname);
+
+    /**
      * Registers a listener for the events of this board, starting with the next change. There is no
      * way to remove a listener. See {@link ScoreboardListener} for the delivery contract.
      *

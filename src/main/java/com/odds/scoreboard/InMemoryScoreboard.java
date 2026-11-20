@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 /**
  * In-memory {@link Scoreboard}. One lock guards all state, so check-then-act sequences such as
@@ -34,6 +35,8 @@ public final class InMemoryScoreboard implements Scoreboard {
     private final List<ScoreboardListener> listeners = new CopyOnWriteArrayList<>();
     /** Live matches in start order. */
     private final Map<MatchKey, Match> liveMatches = new LinkedHashMap<>();
+    /** Finished matches in finish order. Kept only for the player lookup, never exposed directly. */
+    private final List<Match> finishedMatches = new ArrayList<>();
 
     @Override
     public Match startMatch(String homeTeam, String awayTeam) {
@@ -69,6 +72,7 @@ public final class InMemoryScoreboard implements Scoreboard {
         return locked(() -> {
             Match finished = liveMatch(key);
             liveMatches.remove(key);
+            finishedMatches.add(finished);
             publish(new ScoreboardEvent.MatchFinished(finished));
             return finished;
         });
@@ -100,6 +104,28 @@ public final class InMemoryScoreboard implements Scoreboard {
             return mostRecentFirst.stream()
                     .sorted(Comparator.comparingInt(InMemoryScoreboard::totalScore).reversed())
                     .toList();
+        });
+    }
+
+    @Override
+    public PlayerScore getPlayerScore(String team, int shirtNumber, String playerSurname) {
+        PlayerKey player = new PlayerKey(team, shirtNumber, playerSurname);
+        return locked(() -> {
+            // A team plays one live match at a time, so a player's finished matches are already in
+            // start order, followed by at most one live match.
+            List<PlayerScore.MatchScores> matches =
+                    Stream.concat(finishedMatches.stream(), liveMatches.values().stream())
+                            .map(match -> new PlayerScore.MatchScores(match.homeTeam(), match.awayTeam(),
+                                    match.scores().stream()
+                                            .filter(score -> score.playerKey().equals(player))
+                                            .toList()))
+                            .filter(matchScores -> !matchScores.scores().isEmpty())
+                            .toList();
+            return Optional.of(matches)
+                    .filter(found -> !found.isEmpty())
+                    .map(found -> new PlayerScore(player.team(), player.shirtNumber(),
+                            player.playerSurname(), found))
+                    .orElseThrow(() -> new PlayerNotFoundException(player));
         });
     }
 
