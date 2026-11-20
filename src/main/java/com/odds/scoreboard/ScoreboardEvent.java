@@ -21,6 +21,13 @@ public sealed interface ScoreboardEvent {
     }
 
     /**
+     * The last score of a match was removed. {@code match} is the resulting match and {@code score}
+     * is the score that was removed.
+     */
+    record ScoreRemoved(Match match, Score score) implements ScoreboardEvent {
+    }
+
+    /**
      * A match finished. {@code finalResult} holds the final score and the full list of scores.
      */
     record MatchFinished(Match finalResult) implements ScoreboardEvent {

@@ -77,6 +77,23 @@ public record Match(String homeTeam, String awayTeam, int homeScore, int awaySco
         return sameId.isPresent() ? this : createMatchWithScore(score, home, insertChronologically(score));
     }
 
+    /**
+     * Returns a new snapshot without the last score: the one with the latest match time, and among
+     * equal times the latest arrival. That is not always the score received last, because a late
+     * arrival is inserted in chronological position. The removed id can be used again.
+     *
+     * @throws NoScoreToRemoveException if the match has no scores
+     */
+    Match withoutLastScore() {
+        Score removed = scores.reversed().stream().findFirst()
+                .orElseThrow(() -> new NoScoreToRemoveException(homeTeam, awayTeam));
+        boolean home = removed.team().equals(homeTeam);
+        return new Match(homeTeam, awayTeam,
+                home ? homeScore - removed.points() : homeScore,
+                home ? awayScore : awayScore - removed.points(),
+                scores.subList(0, scores.size() - 1));
+    }
+
     private List<Score> insertChronologically(Score score) {
         // sorted() is stable on an ordered stream, so an equal matchTime keeps arrival order
         return Stream.concat(scores.stream(), Stream.of(score))

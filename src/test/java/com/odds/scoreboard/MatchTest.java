@@ -247,6 +247,69 @@ class MatchTest {
     }
 
     @Test
+    void withoutLastScoreRemovesTheLastScoreAndLowersThatSidesTotal() {
+        Match match = Match.start("Spain", "Brazil")
+                .withScore(goal("Spain", 10, "s1"))
+                .withScore(points("Brazil", 2, 20, "s2"));
+
+        Match after = match.withoutLastScore();
+
+        assertThat(after.homeScore()).isEqualTo(1);
+        assertThat(after.awayScore()).isZero();
+        assertThat(ids(after)).containsExactly("s1");
+        assertThat(match.awayScore()).isEqualTo(2);
+        assertThat(ids(match)).containsExactly("s1", "s2");
+    }
+
+    @Test
+    void theLastScoreIsTheLatestByMatchTimeNotTheLastReceived() {
+        Match match = Match.start("Spain", "Brazil")
+                .withScore(goal("Spain", 30, "late"))
+                .withScore(goal("Spain", 10, "early"));
+
+        assertThat(ids(match.withoutLastScore())).containsExactly("early");
+    }
+
+    @Test
+    void amongEqualMatchTimesTheLatestArrivalIsRemoved() {
+        Match match = Match.start("Spain", "Brazil")
+                .withScore(goal("Spain", 20, "first"))
+                .withScore(goal("Brazil", 20, "second"));
+
+        Match after = match.withoutLastScore();
+
+        assertThat(ids(after)).containsExactly("first");
+        assertThat(after.awayScore()).isZero();
+    }
+
+    @Test
+    void removingEveryScoreOneByOneGoesBackToZeroZero() {
+        Match match = Match.start("Spain", "Brazil")
+                .withScore(points("Spain", 3, 10, "s1"))
+                .withScore(goal("Brazil", 20, "s2"));
+
+        assertThat(match.withoutLastScore().withoutLastScore()).isEqualTo(Match.start("Spain", "Brazil"));
+    }
+
+    @Test
+    void withoutLastScoreOnAMatchWithoutScoresThrowsNamingTheTeams() {
+        assertThatThrownBy(() -> Match.start("Spain", "Brazil").withoutLastScore())
+                .isInstanceOf(NoScoreToRemoveException.class)
+                .hasMessageContaining("Spain")
+                .hasMessageContaining("Brazil");
+    }
+
+    @Test
+    void aRemovedScoreIdCanBeUsedAgain() {
+        Match match = Match.start("Spain", "Brazil").withScore(goal("Spain", 10, "s1")).withoutLastScore();
+
+        Match again = match.withScore(points("Spain", 2, 15, "s1"));
+
+        assertThat(again.homeScore()).isEqualTo(2);
+        assertThat(ids(again)).containsExactly("s1");
+    }
+
+    @Test
     void equalityIsByValue() {
         Match one = Match.start("Spain", "Brazil").withScore(goal("Spain", 10, "s1"));
         Match two = Match.start("Spain", "Brazil").withScore(goal("Spain", 10, "s1"));

@@ -31,6 +31,17 @@ public interface Scoreboard {
     Match updateScore(String homeTeam, String awayTeam, Score score);
 
     /**
+     * Removes the last score of a live match, for example a goal the video referee disallowed. The last
+     * score is the one with the latest match time (among equal times, the latest arrival), which is not
+     * always the score received last. The removed {@code scoreId} can be recorded again.
+     *
+     * @return the resulting match
+     * @throws MatchNotFoundException   if the match is not live
+     * @throws NoScoreToRemoveException if the match has no scores
+     */
+    Match removeLastScore(String homeTeam, String awayTeam);
+
+    /**
      * Finishes a live match and removes it from the board.
      *
      * @return the final result

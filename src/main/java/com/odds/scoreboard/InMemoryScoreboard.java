@@ -67,6 +67,18 @@ public final class InMemoryScoreboard implements Scoreboard {
     }
 
     @Override
+    public Match removeLastScore(String homeTeam, String awayTeam) {
+        MatchKey key = new MatchKey(homeTeam, awayTeam);
+        return locked(() -> {
+            Match current = liveMatch(key);
+            Match updated = current.withoutLastScore();
+            liveMatches.put(key, updated);
+            publish(new ScoreboardEvent.ScoreRemoved(updated, current.scores().getLast()));
+            return updated;
+        });
+    }
+
+    @Override
     public Match finishMatch(String homeTeam, String awayTeam) {
         MatchKey key = new MatchKey(homeTeam, awayTeam);
         return locked(() -> {
