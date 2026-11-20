@@ -1,9 +1,11 @@
 package com.odds.scoreboard;
 
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -37,6 +39,11 @@ public record Match(String homeTeam, String awayTeam, int homeScore, int awaySco
             require(scores.get(i - 1).matchTime().compareTo(scores.get(i).matchTime()) <= 0,
                     "Scores must be ordered by matchTime");
         }
+        Set<String> scoreIds = new HashSet<>();
+        for (Score score : scores) {
+            require(scoreIds.add(score.scoreId()),
+                    "scoreId '" + score.scoreId() + "' is used more than once in " + homeTeam + " - " + awayTeam);
+        }
         int homeSum = totals.getOrDefault(homeTeam, 0);
         int awaySum = totals.getOrDefault(awayTeam, 0);
         require(homeSum == homeScore && awaySum == awayScore, "Totals " + homeScore + "-" + awayScore
@@ -50,15 +57,24 @@ public record Match(String homeTeam, String awayTeam, int homeScore, int awaySco
     /**
      * Returns a new snapshot with the score added in chronological position. A score with the same
      * match time as existing ones goes after them.
+     * <p>
+     * Idempotent on {@code scoreId}: a score equal to one already recorded is a replay, and this
+     * snapshot is returned unchanged.
      *
-     * @throws IllegalArgumentException if the score's team is not one of the two sides
+     * @throws IllegalArgumentException if the score's team is not one of the two sides, or its
+     *                                  scoreId is already used by a different score
      */
     Match withScore(Score score) {
         Objects.requireNonNull(score, "score must not be null");
         boolean home = score.team().equals(homeTeam);
         require(home || score.team().equals(awayTeam),
                 "Team '" + score.team() + "' is not playing in " + homeTeam + " - " + awayTeam);
-        return createMatchWithScore(score, home, insertChronologically(score));
+        Optional<Score> sameId = scores.stream()
+                .filter(existing -> existing.scoreId().equals(score.scoreId()))
+                .findFirst();
+        sameId.ifPresent(existing -> require(existing.equals(score), "scoreId '" + score.scoreId()
+                + "' is already used in " + homeTeam + " - " + awayTeam + " by a different score"));
+        return sameId.isPresent() ? this : createMatchWithScore(score, home, insertChronologically(score));
     }
 
     private List<Score> insertChronologically(Score score) {

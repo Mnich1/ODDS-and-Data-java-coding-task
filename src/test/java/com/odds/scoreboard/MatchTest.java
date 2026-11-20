@@ -193,6 +193,60 @@ class MatchTest {
     }
 
     @Test
+    void replayingAnIdenticalScoreReturnsTheSameSnapshot() {
+        Match match = Match.start("Spain", "Brazil").withScore(goal("Spain", 10, "s1"));
+
+        assertThat(match.withScore(goal("Spain", 10, "s1"))).isSameAs(match);
+    }
+
+    @Test
+    void aReplayIsDetectedAfterLaterScoresWithoutChangingTheOrder() {
+        Match match = Match.start("Spain", "Brazil")
+                .withScore(goal("Spain", 10, "s1"))
+                .withScore(points("Brazil", 2, 20, "s2"));
+
+        Match replayed = match.withScore(goal("Spain", 10, "s1"));
+
+        assertThat(replayed).isSameAs(match);
+        assertThat(ids(replayed)).containsExactly("s1", "s2");
+        assertThat(replayed.homeScore()).isEqualTo(1);
+        assertThat(replayed.awayScore()).isEqualTo(2);
+    }
+
+    @Test
+    void aReplayWithUnstrippedValuesIsStillAReplay() {
+        Match match = Match.start("Spain", "Brazil").withScore(goal("Spain", 10, "s1"));
+
+        Score replay = Score.goal(" Spain ", 9, " Player ", Duration.ofMinutes(10), " s1 ");
+
+        assertThat(match.withScore(replay)).isSameAs(match);
+    }
+
+    @Test
+    void reusingAScoreIdWithDifferentContentIsRejected() {
+        Match match = Match.start("Spain", "Brazil").withScore(goal("Spain", 10, "s1"));
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> match.withScore(points("Spain", 2, 10, "s1")))
+                .withMessageContaining("s1");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> match.withScore(goal("Spain", 11, "s1")));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> match.withScore(Score.goal("Spain", 9, "Other", Duration.ofMinutes(10), "s1")));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> match.withScore(goal("Brazil", 10, "s1")));
+    }
+
+    @Test
+    void constructorRejectsDuplicateScoreIds() {
+        List<Score> scores = List.of(goal("Spain", 10, "s1"), goal("Spain", 20, "s1"));
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new Match("Spain", "Brazil", 2, 0, scores))
+                .withMessageContaining("s1");
+    }
+
+    @Test
     void equalityIsByValue() {
         Match one = Match.start("Spain", "Brazil").withScore(goal("Spain", 10, "s1"));
         Match two = Match.start("Spain", "Brazil").withScore(goal("Spain", 10, "s1"));

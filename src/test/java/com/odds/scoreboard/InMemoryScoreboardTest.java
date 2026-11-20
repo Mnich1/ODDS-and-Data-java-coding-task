@@ -279,6 +279,73 @@ class InMemoryScoreboardTest {
         }
     }
 
+    @Nested
+    class ScoreReplay {
+
+        @Test
+        void aReplayedScoreIsANoOpReturningTheCurrentMatch() {
+            board.startMatch("Spain", "Brazil");
+            Match first = board.updateScore("Spain", "Brazil", goal("Spain", 10, "s1"));
+
+            Match replayed = board.updateScore("Spain", "Brazil", goal("Spain", 10, "s1"));
+
+            assertThat(replayed).isEqualTo(first);
+            assertThat(replayed.homeScore()).isEqualTo(1);
+            assertThat(replayed.scores()).hasSize(1);
+        }
+
+        @Test
+        void aReplayDoesNotDoubleCountPointsAndLaterScoresStillCount() {
+            board.startMatch("Spain", "Brazil");
+            Score threePoints = new Score("Brazil", 9, "Player", 3, Duration.ofMinutes(5), "s1");
+            board.updateScore("Spain", "Brazil", threePoints);
+            board.updateScore("Spain", "Brazil", threePoints);
+
+            Match match = board.updateScore("Spain", "Brazil", goal("Brazil", 20, "s2"));
+
+            assertThat(match.awayScore()).isEqualTo(4);
+            assertThat(match.scores()).hasSize(2);
+        }
+
+        @Test
+        void reusingAScoreIdWithDifferentContentIsRejectedAndLeavesTheStateUnchanged() {
+            board.startMatch("Spain", "Brazil");
+            board.updateScore("Spain", "Brazil", goal("Spain", 10, "s1"));
+
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> board.updateScore("Spain", "Brazil",
+                            new Score("Spain", 9, "Player", 2, Duration.ofMinutes(10), "s1")))
+                    .withMessageContaining("s1");
+
+            Match match = board.updateScore("Spain", "Brazil", goal("Spain", 20, "s2"));
+            assertThat(match.homeScore()).isEqualTo(2);
+            assertThat(match.scores()).hasSize(2);
+        }
+
+        @Test
+        void theSameScoreIdMayBeUsedInAnotherMatch() {
+            board.startMatch("Spain", "Brazil");
+            board.startMatch("France", "Germany");
+            board.updateScore("Spain", "Brazil", goal("Spain", 10, "s1"));
+
+            Match other = board.updateScore("France", "Germany", goal("France", 10, "s1"));
+
+            assertThat(other.homeScore()).isEqualTo(1);
+        }
+
+        @Test
+        void theSameScoreIdMayBeUsedAgainInARematchOfTheSamePair() {
+            board.startMatch("Spain", "Brazil");
+            board.updateScore("Spain", "Brazil", goal("Spain", 10, "s1"));
+            board.finishMatch("Spain", "Brazil");
+            board.startMatch("Spain", "Brazil");
+
+            Match rematch = board.updateScore("Spain", "Brazil", goal("Spain", 10, "s1"));
+
+            assertThat(rematch.homeScore()).isEqualTo(1);
+        }
+    }
+
     @Test
     void stateViolationsShareTheScoreboardExceptionBaseType() {
         board.startMatch("Spain", "Brazil");
