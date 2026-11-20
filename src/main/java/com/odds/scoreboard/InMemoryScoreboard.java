@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
@@ -26,7 +27,11 @@ public final class InMemoryScoreboard implements Scoreboard {
         }
     }
 
+    private static final System.Logger LOG = System.getLogger(InMemoryScoreboard.class.getName());
+
     private final ReentrantLock lock = new ReentrantLock();
+    /** Rarely registered, often iterated. */
+    private final List<ScoreboardListener> listeners = new CopyOnWriteArrayList<>();
     /** Live matches in start order. */
     private final Map<MatchKey, Match> liveMatches = new LinkedHashMap<>();
 
@@ -37,6 +42,7 @@ public final class InMemoryScoreboard implements Scoreboard {
             requireAvailable(match.homeTeam());
             requireAvailable(match.awayTeam());
             liveMatches.put(new MatchKey(match.homeTeam(), match.awayTeam()), match);
+            publish(new ScoreboardEvent.MatchStarted(match));
             return match;
         });
     }
@@ -49,6 +55,10 @@ public final class InMemoryScoreboard implements Scoreboard {
             Match current = liveMatch(key);
             Match updated = current.withScore(score);
             liveMatches.put(key, updated);
+            // withScore returns the same snapshot for a replay, which publishes nothing
+            if (updated != current) {
+                publish(new ScoreboardEvent.ScoreRecorded(updated, score));
+            }
             return updated;
         });
     }
@@ -59,8 +69,26 @@ public final class InMemoryScoreboard implements Scoreboard {
         return locked(() -> {
             Match finished = liveMatch(key);
             liveMatches.remove(key);
+            publish(new ScoreboardEvent.MatchFinished(finished));
             return finished;
         });
+    }
+
+    @Override
+    public void addListener(ScoreboardListener listener) {
+        listeners.add(Objects.requireNonNull(listener, "listener must not be null"));
+    }
+
+    /** Called with the lock held, after the state changed. A failing listener must not affect the others. */
+    private void publish(ScoreboardEvent event) {
+        for (ScoreboardListener listener : listeners) {
+            try {
+                listener.onEvent(event);
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "Listener failed while handling " + event.getClass().getSimpleName(), e);
+            }
+        }
     }
 
     @Override

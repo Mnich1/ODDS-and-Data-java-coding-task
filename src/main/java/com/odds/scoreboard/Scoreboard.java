@@ -46,4 +46,12 @@ public interface Scoreboard {
      * @return an unmodifiable snapshot, never a live view
      */
     List<Match> getSummary();
+
+    /**
+     * Registers a listener for the events of this board, starting with the next change. There is no
+     * way to remove a listener. See {@link ScoreboardListener} for the delivery contract.
+     *
+     * @throws NullPointerException if {@code listener} is null
+     */
+    void addListener(ScoreboardListener listener);
 }
