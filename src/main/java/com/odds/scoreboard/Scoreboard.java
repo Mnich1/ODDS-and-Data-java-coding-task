@@ -1,5 +1,7 @@
 package com.odds.scoreboard;
 
+import java.util.List;
+
 /**
  * A live scoreboard holding several simultaneous matches.
  * <p>
@@ -35,4 +37,13 @@ public interface Scoreboard {
      * @throws MatchNotFoundException if the match is not live
      */
     Match finishMatch(String homeTeam, String awayTeam);
+
+    /**
+     * Summarises the matches in progress, ordered by total score descending. Matches with equal
+     * totals are ordered by start, most recently started first. Score updates don't change the order
+     * of a start.
+     *
+     * @return an unmodifiable snapshot, never a live view
+     */
+    List<Match> getSummary();
 }

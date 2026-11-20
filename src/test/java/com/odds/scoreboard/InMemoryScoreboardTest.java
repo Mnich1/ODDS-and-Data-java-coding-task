@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
@@ -276,6 +277,138 @@ class InMemoryScoreboardTest {
             assertThatNullPointerException().isThrownBy(() -> board.finishMatch("Spain", null));
             assertThatIllegalArgumentException().isThrownBy(() -> board.finishMatch(" ", "Brazil"));
             assertThatIllegalArgumentException().isThrownBy(() -> board.finishMatch("Spain", ""));
+        }
+    }
+
+    @Nested
+    class GetSummary {
+
+        private Match play(String home, String away, int homeGoals, int awayGoals) {
+            board.startMatch(home, away);
+            Match match = null;
+            for (int i = 1; i <= homeGoals; i++) {
+                match = board.updateScore(home, away, goal(home, i, "h" + i));
+            }
+            for (int i = 1; i <= awayGoals; i++) {
+                match = board.updateScore(home, away, goal(away, i, "a" + i));
+            }
+            return match;
+        }
+
+        private List<String> teams() {
+            return board.getSummary().stream().map(m -> m.homeTeam() + " - " + m.awayTeam()).toList();
+        }
+
+        @Test
+        void anEmptyBoardHasAnEmptySummary() {
+            assertThat(board.getSummary()).isEmpty();
+        }
+
+        @Test
+        void aNewMatchAppearsAtZeroZero() {
+            Match started = board.startMatch("Spain", "Brazil");
+
+            assertThat(board.getSummary()).containsExactly(started);
+        }
+
+        @Test
+        void ordersByTotalScoreDescending() {
+            play("Mexico", "Canada", 0, 1);
+            play("Spain", "Brazil", 3, 2);
+            play("Germany", "France", 1, 0);
+
+            assertThat(teams()).containsExactly("Spain - Brazil", "Germany - France", "Mexico - Canada");
+        }
+
+        @Test
+        void equalTotalsListTheMostRecentlyStartedFirst() {
+            board.startMatch("A1", "A2");
+            board.startMatch("B1", "B2");
+            board.startMatch("C1", "C2");
+
+            assertThat(teams()).containsExactly("C1 - C2", "B1 - B2", "A1 - A2");
+        }
+
+        @Test
+        void aCombinedExampleOrdersByTotalThenRecency() {
+            play("Mexico", "Canada", 0, 5);
+            play("Spain", "Brazil", 10, 2);
+            play("Germany", "France", 2, 2);
+            play("Uruguay", "Italy", 6, 6);
+            play("Argentina", "Australia", 3, 1);
+
+            assertThat(teams()).containsExactly(
+                    "Uruguay - Italy", "Spain - Brazil", "Mexico - Canada", "Argentina - Australia",
+                    "Germany - France");
+        }
+
+        @Test
+        void scoreUpdatesDoNotChangeStartRecency() {
+            board.startMatch("A1", "A2");
+            board.startMatch("B1", "B2");
+            board.updateScore("B1", "B2", goal("B1", 10, "s1"));
+            board.updateScore("A1", "A2", goal("A1", 10, "s2"));
+
+            assertThat(teams()).containsExactly("B1 - B2", "A1 - A2");
+        }
+
+        @Test
+        void reflectsUpdatesAndTheFinalSnapshotOfEachMatch() {
+            board.startMatch("Spain", "Brazil");
+            Match updated = board.updateScore("Spain", "Brazil", goal("Spain", 10, "s1"));
+
+            assertThat(board.getSummary()).containsExactly(updated);
+        }
+
+        @Test
+        void aFinishedMatchLeavesTheSummary() {
+            play("Spain", "Brazil", 1, 0);
+            play("France", "Germany", 0, 0);
+
+            board.finishMatch("Spain", "Brazil");
+
+            assertThat(teams()).containsExactly("France - Germany");
+        }
+
+        @Test
+        void aRestartedPairCountsAsTheMostRecentStart() {
+            board.startMatch("A1", "A2");
+            board.startMatch("B1", "B2");
+            board.finishMatch("A1", "A2");
+            board.startMatch("A1", "A2");
+
+            assertThat(teams()).containsExactly("A1 - A2", "B1 - B2");
+        }
+
+        @Test
+        void theSummaryIsAnUnmodifiableSnapshot() {
+            board.startMatch("Spain", "Brazil");
+            List<Match> summary = board.getSummary();
+
+            board.startMatch("France", "Germany");
+            board.updateScore("Spain", "Brazil", goal("Spain", 10, "s1"));
+
+            assertThat(summary).hasSize(1);
+            assertThat(summary.getFirst().homeScore()).isZero();
+            assertThatThrownBy(() -> summary.add(Match.start("X", "Y")))
+                    .isInstanceOf(UnsupportedOperationException.class);
+        }
+        @Test
+        void referenceScenarioFromTheBrief() {
+            play("Mexico", "Canada", 0, 5);
+            play("Spain", "Brazil", 10, 2);
+            play("Germany", "France", 2, 2);
+            play("Uruguay", "Italy", 6, 6);
+            play("Argentina", "Australia", 3, 1);
+
+            assertThat(board.getSummary())
+                    .extracting(m -> m.homeTeam() + " " + m.homeScore() + " - " + m.awayTeam() + " " + m.awayScore())
+                    .containsExactly(
+                            "Uruguay 6 - Italy 6",
+                            "Spain 10 - Brazil 2",
+                            "Mexico 0 - Canada 5",
+                            "Argentina 3 - Australia 1",
+                            "Germany 2 - France 2");
         }
     }
 

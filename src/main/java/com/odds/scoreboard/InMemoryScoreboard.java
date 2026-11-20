@@ -1,6 +1,10 @@
 package com.odds.scoreboard;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -57,6 +61,22 @@ public final class InMemoryScoreboard implements Scoreboard {
             liveMatches.remove(key);
             return finished;
         });
+    }
+
+    @Override
+    public List<Match> getSummary() {
+        return locked(() -> {
+            List<Match> mostRecentFirst = new ArrayList<>(liveMatches.values());
+            Collections.reverse(mostRecentFirst);
+            // sorted() is stable, so equal totals keep the most-recently-started-first order
+            return mostRecentFirst.stream()
+                    .sorted(Comparator.comparingInt(InMemoryScoreboard::totalScore).reversed())
+                    .toList();
+        });
+    }
+
+    private static int totalScore(Match match) {
+        return match.homeScore() + match.awayScore();
     }
 
     private Match liveMatch(MatchKey key) {
